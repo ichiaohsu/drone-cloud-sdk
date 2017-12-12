@@ -1,0 +1,44 @@
+workspace:
+  base: /go
+  path: src/github.com/ichiaohsu/drone-cloud-sdk
+pipeline:
+  start_slack:
+    image: plugins/slack
+    channel: ground_control
+    secrets: [slack_webhook]
+    username: drone
+    icon_url: https://avatars2.githubusercontent.com/u/2181346?s=200&v=4
+    template: >
+      {{build.author}} give {{repo.name}}:{{build.branch}} a little push.
+      build for {{truncate build.sha 8}} started.
+  build:
+    image: golang
+    commands:
+    - env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -o drone-gsr main.go
+    when:
+      event:
+      - push
+      - pull_request
+  publish:
+    image: plugins/gcr
+    repo: mirrormedia-1470651750304/${DRONE_REPO_NAME}
+    tag: test
+    # previleged: true
+    environment:
+      - DOCKER_LAUNCH_DEBUG=true
+    secrets: [google_credentials]
+  finish_slack:
+    image: plugins/slack
+    channel: ground_control
+    secrets: [slack_webhook]
+    username: drone
+    icon_url: https://avatars2.githubusercontent.com/u/2181346?s=200&v=4
+    when:
+      status: [success, failure]
+    template: >
+      {{#success build.status}}
+        {{build.author}}, build#{{truncate build.sha 8}} was well served.
+        Check out our new docker - mirrormedia-1470651750304/drone-gsr:latest
+      {{else}}
+        Houston, we have a problem. Build#{{build.number}} failed. {{build.author}}, fix me, please.
+      {{/success}}
